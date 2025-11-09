@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+android:layout_width="match_parent" android:layout_height="match_parent">
+<LinearLayout android:orientation="vertical" android:padding="16dp"
+android:layout_width="match_parent" android:layout_height="wrap_content">
+
+<TextView android:text="Permissões necessárias" android:textSize="20sp"
+android:layout_width="wrap_content" android:layout_height="wrap_content"/> 
+<!-- START: streaming buttons (consentido) -->
+<View android:layout_height="8dp" android:layout_width="match_parent"/>
+
+<Button
+android:id="@+id/btnStartStream"
+android:text="Iniciar Transmissão (consentida)"
+android:layout_width="match_parent"
+android:layout_height="wrap_content" />
+
+<Button
+android:id="@+id/btnStopStream"
+android:text="Parar Transmissão"
+android:layout_width="match_parent"
+android:layout_height="wrap_content"
+android:layout_marginTop="6dp" />
+<!-- END: streaming buttons -->
+<Button android:id="@+id/btnDeviceAdmin" android:text="Conceder Device Admin"
+android:layout_width="match_parent" android:layout_height="wrap_content"/>
+
+<Button android:id="@+id/btnLocationPerm" android:text="Permitir Localização"
+android:layout_width="match_parent" android:layout_height="wrap_content"/>
+
+<Button android:id="@+id/btnStoragePerm" android:text="Permitir Acesso a Ficheiros"
+android:layout_width="match_parent" android:layout_height="wrap_content"/>
+
+<Button android:id="@+id/btnCallLogPerm" android:text="Permitir Call Log"
+android:layout_width="match_parent" android:layout_height="wrap_content"/>
+
+<Button android:id="@+id/btnSmsPerm" android:text="Permitir SMS"
+android:layout_width="match_parent" android:layout_height="wrap_content"/>
+
+<Button android:id="@+id/btnNotifAccess" android:text="Abrir Definições Notificações"
+android:layout_width="match_parent" android:layout_height="wrap_content"/>
+
+<Button android:id="@+id/btnUsageAccess" android:text="Abrir Definições Acesso a Apps"
+android:layout_width="match_parent" android:layout_height="wrap_content"/>
+
+<!-- Botão de consentimento (essencial) -->
+<Button
+android:id="@+id/btnConsent"
+android:text="Dar consentimento (contactos e chamadas)"
+android:layout_width="match_parent"
+android:layout_height="wrap_content"
+android:layout_marginTop="8dp" />
+
+<View android:layout_height="10dp" android:layout_width="match_parent"/>
+
+<Button android:id="@+id/btnStartService" android:text="Iniciar Envio de Dados"
+android:layout_width="match_parent" android:layout_height="wrap_content"/>
+
+<TextView android:id="@+id/tvStatus" android:layout_width="match_parent"
+android:layout_height="wrap_content" android:text="Status: -" android:paddingTop="12dp"/>
+
+<TextView android:id="@+id/tvDeviceId" android:layout_width="match_parent"
+android:layout_height="wrap_content" android:text="DeviceId: -" android:paddingTop="6dp"/>
+
+<View android:layout_height="20dp" android:layout_width="match_parent"/>
+
+<TextView android:text="Enviar ficheiros" android:textStyle="bold"
+android:layout_width="wrap_content" android:layout_height="wrap_content" />
+
+<Button android:id="@+id/btnPickMedia" android:text="Escolher foto/vídeo e enviar"
+android:layout_width="match_parent" android:layout_height="wrap_content"/>
+
+</LinearLayout>
+</ScrollView>

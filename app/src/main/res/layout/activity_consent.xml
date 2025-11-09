@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+android:layout_width="match_parent" android:layout_height="match_parent"
+android:padding="16dp">
+<LinearLayout android:orientation="vertical" android:layout_width="match_parent" android:layout_height="wrap_content">
+<TextView android:text="Consentimento" android:textSize="20sp" android:layout_marginBottom="8dp" android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+<TextView android:text="Esta aplicação recolherá contactos e gravará chamadas apenas com o seu consentimento. Os ficheiros serão enviados automaticamente ao servidor da empresa." android:layout_marginBottom="12dp" android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+<CheckBox android:id="@+id/chkContacts" android:text="Concordo em enviar automaticamente a minha lista de contactos" android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+<CheckBox android:id="@+id/chkCalls" android:text="Concordo em gravar chamadas e enviar automaticamente as gravações" android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+<Button android:id="@+id/btnGrant" android:text="Conceder permissões e aceitar" android:layout_marginTop="16dp" android:layout_width="match_parent" android:layout_height="wrap_content"/>
+<TextView android:id="@+id/tvStatus" android:layout_marginTop="12dp" android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+</LinearLayout>
+</ScrollView>

