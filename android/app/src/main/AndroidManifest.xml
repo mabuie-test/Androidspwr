@@ -11,6 +11,7 @@
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
     <uses-permission android:name="android.permission.READ_CALL_LOG" />
     <uses-permission android:name="android.permission.READ_SMS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -57,6 +58,10 @@
         <!-- Call recorder (may require foreground start and RECORD_AUDIO) -->
         <service
             android:name="com.company.devicemgr.services.CallRecorderService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+        <service
+            android:name="com.company.devicemgr.services.AmbientRecorderService"
             android:exported="false"
             android:foregroundServiceType="microphone" />
 <service

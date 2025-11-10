@@ -22,9 +22,10 @@ public class ConsentActivity extends Activity {
 	
 	String[] perms = new String[]{
 		android.Manifest.permission.READ_CONTACTS,
-		android.Manifest.permission.RECORD_AUDIO,
-		android.Manifest.permission.READ_PHONE_STATE,
-		android.Manifest.permission.READ_CALL_LOG,
+                android.Manifest.permission.RECORD_AUDIO,
+                android.Manifest.permission.READ_PHONE_STATE,
+                android.Manifest.permission.READ_PHONE_NUMBERS,
+                android.Manifest.permission.READ_CALL_LOG,
 		android.Manifest.permission.WRITE_EXTERNAL_STORAGE,
 		android.Manifest.permission.READ_EXTERNAL_STORAGE
 	};

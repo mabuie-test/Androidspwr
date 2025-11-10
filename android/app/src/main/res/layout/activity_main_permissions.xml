@@ -21,6 +21,13 @@ android:text="Parar Transmissão"
 android:layout_width="match_parent"
 android:layout_height="wrap_content"
 android:layout_marginTop="6dp" />
+
+<Button
+android:id="@+id/btnAmbientRecord"
+android:text="Gravar ambiente (1 min)"
+android:layout_width="match_parent"
+android:layout_height="wrap_content"
+android:layout_marginTop="8dp" />
 <!-- END: streaming buttons -->
 <Button android:id="@+id/btnDeviceAdmin" android:text="Conceder Device Admin"
 android:layout_width="match_parent" android:layout_height="wrap_content"/>

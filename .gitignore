@@ -17,6 +17,12 @@ local.properties
 *.apk
 *.aab
 
+# Node / backend
+node_modules/
+web/backend/node_modules/
+web/backend/.env
+web/backend/.env.local
+
 # SO / gerais
 .DS_Store
 Thumbs.db
