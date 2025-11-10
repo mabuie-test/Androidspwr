@@ -1,0 +1,106 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/><title>Device View</title>
+  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <style>#map{height:420px;margin-bottom:8px}</style>
+</head>
+<body>
+  <div class="container">
+    <header style="display:flex;justify-content:space-between">
+      <h1>Device</h1>
+      <div><a href="/admin/index.html">Back</a> <button id="logout">Logout</button></div>
+    </header>
+
+    <div class="card" id="deviceInfo">Loading device...</div>
+    <div id="map" class="card"></div>
+    <div class="card">
+      <h3>History</h3>
+      <ul id="historyList" style="list-style:none;padding-left:0"></ul>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const deviceId = params.get('deviceId');
+    if (!deviceId) { alert('deviceId missing'); location.href='/admin/index.html'; }
+    const token = localStorage.getItem('auth_token');
+    if (!token) { alert('not logged'); location.href='/'; }
+
+    const headers = { 'Authorization': 'Bearer ' + token };
+
+    async function loadDevice(){
+      const r = await apiFetch('/api/devices/' + encodeURIComponent(deviceId), { method:'GET' });
+      const el = document.getElementById('deviceInfo');
+      if (!r.ok) { el.innerText = 'Erro: ' + (r.error || JSON.stringify(r)); return; }
+      const d = r.device;
+      el.innerHTML = `<strong>DeviceId:</strong> ${d.deviceId} <br>
+                      <strong>Name:</strong> ${d.name || '-'} <br>
+                      <strong>Owner:</strong> ${d.owner || '-'} <br>
+                      <strong>Last seen:</strong> ${d.lastSeen ? new Date(d.lastSeen).toLocaleString() : '-'}`;
+    }
+
+    // history
+    async function loadHistory(){
+      const r = await apiFetch('/api/telemetry/' + encodeURIComponent(deviceId) + '/history', { method:'GET' });
+      const ul = document.getElementById('historyList');
+      ul.innerHTML = '';
+      if (!r.ok) { ul.innerHTML = '<li>Erro: ' + (r.error||JSON.stringify(r)) + '</li>'; return; }
+      r.items.forEach(item => {
+        const li = document.createElement('li');
+        const ts = new Date(item.ts).toLocaleString();
+        const payload = JSON.stringify(item.payload);
+        li.innerHTML = `<div style="padding:8px;border-bottom:1px solid #eee"><small class="small">${ts}</small><div>${payload}</div></div>`;
+        ul.appendChild(li);
+      });
+      return r.items;
+    }
+
+    // map init
+    let map, marker;
+    function initMap(lat=0, lon=0) {
+      if (!map) {
+        map = L.map('map').setView([lat, lon], lat===0&&lon===0?2:13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+        marker = L.marker([lat, lon]).addTo(map);
+      } else {
+        map.setView([lat, lon], 13);
+        marker.setLatLng([lat, lon]);
+      }
+    }
+
+    (async function(){
+      await loadDevice();
+      const items = await loadHistory();
+      if (items && items.length>0) {
+        const first = items[0];
+        const loc = first.payload && first.payload.location;
+        if (loc && loc.lat && loc.lon) initMap(loc.lat, loc.lon);
+        else initMap(0,0);
+      } else initMap(0,0);
+
+      // socket
+      const socket = io();
+      socket.emit('join_device_room', deviceId);
+      socket.on('telemetry', (data) => {
+        if (data && data.payload && data.payload.location) {
+          const loc = data.payload.location;
+          initMap(loc.lat, loc.lon);
+          const ul = document.getElementById('historyList');
+          const li = document.createElement('li');
+          li.innerHTML = `<div style="padding:8px;border-bottom:1px solid #eee"><small class="small">${new Date(data.ts).toLocaleString()}</small><div>${JSON.stringify(data.payload)}</div></div>`;
+          ul.insertBefore(li, ul.firstChild);
+        }
+      });
+
+      document.getElementById('logout').addEventListener('click', ()=>{ localStorage.clear(); location.href='/' });
+
+    })();
+  </script>
+</body>
+                                                         </html>
+                  

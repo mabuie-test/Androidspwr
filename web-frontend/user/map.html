@@ -1,0 +1,265 @@
+ <!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Mapa do Dispositivo — Visualização</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    body{margin:0;font-family:Inter,system-ui,Arial,sans-serif}
+    .container{max-width:1100px;margin:12px auto;padding:12px}
+    #map{height:60vh;min-height:320px;border-radius:8px;box-shadow:0 6px 18px rgba(11,22,39,0.06)}
+    .card{background:#fff;padding:12px;border-radius:10px;margin-bottom:12px;box-shadow:0 6px 18px rgba(11,22,39,0.04)}
+    .controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    input,select{padding:8px;border-radius:8px;border:1px solid #e6e9ef}
+    button{padding:8px 12px;border-radius:8px;border:none;background:#2563eb;color:#fff}
+    .small{font-size:0.9rem;color:#6b7280}
+    .list-item{padding:8px;border-bottom:1px solid #eee}
+    .toggle{display:inline-flex;align-items:center;gap:8px}
+    @media(max-width:600px){ .controls{flex-direction:column} button{width:100%} }
+  </style>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <header style="display:flex;justify-content:space-between;align-items:center">
+      <h2>Mapa do Dispositivo</h2>
+      <div><a href="/user/dashboard.html">Voltar</a> <button id="logout">Logout</button></div>
+    </header>
+
+    <div class="card">
+      <div class="controls">
+        <input id="deviceId" placeholder="Cole aqui o deviceId (ou abrir com ?deviceId=...)" />
+        <select id="timeRange" title="Filtro temporal">
+          <option value="24h">Últimas 24h</option>
+          <option value="1h">Última 1h</option>
+          <option value="7d">Últimos 7 dias</option>
+          <option value="all">Todo histórico</option>
+        </select>
+        <div class="toggle">
+          <label><input type="checkbox" id="realtimeToggle" checked /> Realtime</label>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="autoRefresh" /> Auto-refresh (30s)</label>
+        <button id="btnLoad">Carregar</button>
+        <button id="btnClear" style="background:#eef6ff;color:#0b2f6c">Limpar</button>
+      </div>
+      <div style="margin-top:8px" id="status" class="small">Pronto</div>
+    </div>
+
+    <div id="map" class="card"></div>
+
+    <div class="card">
+      <h3>Últimos pontos</h3>
+      <ul id="list" style="list-style:none;padding-left:0;margin:0;max-height:220px;overflow:auto"></ul>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    // util
+    function toNum(v){ if (v===null||v===undefined) return NaN; if (typeof v==='number') return v; return parseFloat(String(v).replace(',', '.')) }
+    function fmt(ts){ try { return new Date(Number(ts)).toLocaleString(); } catch(e) { return String(ts) } }
+
+    // extractor para o formato real: items[i].payload.payload.location
+    function extractLocation(item) {
+      if (typeof item === 'string') {
+        try { item = JSON.parse(item); } catch(e) {}
+      }
+      // caso comum: item.payload.payload.location
+      const p1 = item && (item.payload || item['payload']);
+      const p2 = p1 && (p1.payload || p1['payload']);
+      const finalPl = p2 || p1 || item;
+      const loc = finalPl && (finalPl.location || finalPl.localizacao || finalPl['localização'] || finalPl.loc);
+      let lat = NaN, lon = NaN, acc = null, ts = null;
+      if (loc) {
+        lat = toNum(loc.lat || loc.latitude);
+        lon = toNum(loc.lon || loc.longitude);
+        acc = loc.accuracy || loc.precision || loc.precisao;
+      } else {
+        lat = toNum(finalPl.lat || finalPl.latitude);
+        lon = toNum(finalPl.lon || finalPl.longitude);
+        acc = finalPl.accuracy || finalPl.precision;
+      }
+      ts = (finalPl && (finalPl.ts || finalPl.time || finalPl.timestamp)) || (item && (item.ts || item.time)) || Date.now();
+      return { lat, lon, acc, ts, raw: item };
+    }
+
+    // map state
+    let map=null, markers=[], lastMarker=null, poly=null, latlngs=[];
+    let socket=null, currentDevice=null, autoRefreshHandle=null;
+
+    function ensureMap(){
+      if (!map) {
+        map = L.map('map').setView([0,0], 2);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19 }).addTo(map);
+      }
+    }
+
+    function clearAll(){
+      if (!map) ensureMap();
+      markers.forEach(m=>map.removeLayer(m)); markers=[];
+      if (lastMarker){ map.removeLayer(lastMarker); lastMarker=null; }
+      if (poly){ map.removeLayer(poly); poly=null; }
+      latlngs=[];
+      document.getElementById('list').innerHTML='';
+      document.getElementById('status').innerText='Limpo';
+      if (socket) { try{ socket.emit('leave_device_room', currentDevice); }catch(e){} try{ socket.disconnect(); }catch(e){} socket=null; currentDevice=null; }
+      if (autoRefreshHandle) { clearInterval(autoRefreshHandle); autoRefreshHandle = null; }
+    }
+
+    function addPoint(lat, lon, acc, ts, openPopup){
+      const la = Number(lat), lo = Number(lon); if (!isFinite(la) || !isFinite(lo)) return;
+      const m = L.circleMarker([la, lo], { radius:6, color:'#1976d2', fillColor:'#1976d2', fillOpacity:0.9 }).addTo(map);
+      const popup = `<div style="min-width:160px"><div><strong>${fmt(ts)}</strong></div><div>Accuracy: ${acc||'-'}</div><div style="margin-top:6px"><a href="https://www.google.com/maps/search/?api=1&query=${la},${lo}" target="_blank">Abrir no Google Maps</a></div></div>`;
+      m.bindPopup(popup);
+      markers.push(m);
+      latlngs.push([la, lo]);
+
+      if (poly) map.removeLayer(poly);
+      if (latlngs.length >= 2) poly = L.polyline(latlngs, { color:'#2563eb', weight:4, opacity:0.9 }).addTo(map);
+
+      if (lastMarker) { map.removeLayer(lastMarker); lastMarker=null; }
+      lastMarker = L.circleMarker([la, lo], { radius:9, color:'#16a34a', fillColor:'#16a34a', fillOpacity:0.95 }).addTo(map);
+      lastMarker.bindPopup(popup);
+      if (openPopup) try{ lastMarker.openPopup(); }catch(e){}
+    }
+
+    function prependList(lat, lon, acc, ts){
+      const ul = document.getElementById('list');
+      const li = document.createElement('li');
+      li.className = 'list-item';
+      li.innerHTML = `<strong>${fmt(ts)}</strong><div>Lat: ${Number(lat).toFixed(6)} Lon: ${Number(lon).toFixed(6)}</div><div>Accuracy: ${acc||'-'}</div><div style="margin-top:6px"><a href="https://www.google.com/maps/search/?api=1&query=${lat},${lon}" target="_blank">Abrir no Google Maps</a></div>`;
+      ul.insertBefore(li, ul.firstChild);
+    }
+
+    // apply time filter: '1h','24h','7d','all'
+    function filterByTime(items, range) {
+      if (range === 'all') return items;
+      const now = Date.now();
+      let cutoff = 0;
+      if (range === '1h') cutoff = now - 1000*60*60;
+      else if (range === '24h') cutoff = now - 1000*60*60*24;
+      else if (range === '7d') cutoff = now - 1000*60*60*24*7;
+      return items.filter(it => {
+        const loc = extractLocation(it);
+        const ts = Number(loc.ts || Date.now());
+        return ts >= cutoff;
+      });
+    }
+
+    // load history from backend, filter and draw
+    async function loadOnce() {
+      const deviceId = document.getElementById('deviceId').value.trim();
+      if (!deviceId) return alert('Insira deviceId');
+      ensureMap();
+      // clear visual markers (keep map)
+      markers.forEach(m=>map.removeLayer(m)); markers=[]; if (lastMarker){ map.removeLayer(lastMarker); lastMarker=null; } if (poly){ map.removeLayer(poly); poly=null; } latlngs=[]; document.getElementById('list').innerHTML=''; document.getElementById('status').innerText='Carregando...';
+
+      try {
+        const r = await apiFetch('/api/telemetry/' + encodeURIComponent(deviceId) + '/items?type=telemetry', { method:'GET' });
+        // extract items array (tolerant)
+        let items = [];
+        if (!r) items = [];
+        else if (Array.isArray(r)) items = r;
+        else if (r.items && Array.isArray(r.items)) items = r.items;
+        else if (r.data && Array.isArray(r.data)) items = r.data;
+        else if (r.payload && Array.isArray(r.payload)) items = r.payload;
+        else items = r.items || [];
+
+        // apply temporal filter
+        const range = document.getElementById('timeRange').value;
+        const filtered = filterByTime(items, range);
+
+        // normalize & collect pts
+        const pts = [];
+        for (let i=0;i<filtered.length;i++){
+          const p = extractLocation(filtered[i]);
+          if (isFinite(Number(p.lat)) && isFinite(Number(p.lon))) pts.push(p);
+        }
+
+        if (pts.length === 0) {
+          document.getElementById('status').innerText = 'Nenhum ponto com lat/lon no período selecionado';
+          map.setView([0,0], 2);
+        } else {
+          pts.sort((a,b) => Number(a.ts) - Number(b.ts));
+          pts.forEach(pt => addPoint(pt.lat, pt.lon, pt.acc, pt.ts, false));
+          const last = pts[pts.length-1];
+          setTimeout(()=>{ try{ map.fitBounds(latlngs, { padding:[40,40], maxZoom:16 }); } catch(e) { map.setView([Number(last.lat), Number(last.lon)], 13); } }, 120);
+          for (let i=pts.length-1;i>=0;i--) prependList(pts[i].lat, pts[i].lon, pts[i].acc, pts[i].ts);
+          document.getElementById('status').innerText = 'OK — ' + pts.length + ' pontos (última atualização: ' + fmt(Date.now()) + ')';
+        }
+      } catch (err) {
+        console.error('loadOnce err', err);
+        document.getElementById('status').innerText = 'Erro ao carregar histórico';
+      }
+    }
+
+    // realtime socket handling
+    function startRealtime(deviceId) {
+      if (socket) return;
+      socket = io(window.location.origin, { transports:['websocket','polling'] });
+      currentDevice = deviceId;
+      socket.on('connect', ()=>{ console.log('socket connected', socket.id); socket.emit('join_device_room', deviceId); document.getElementById('status').innerText = 'Realtime ligado'; });
+      socket.on('telemetry', data => handleRealtimeData(data));
+      socket.on('telemetria', data => handleRealtimeData(data)); // fallback
+      socket.onAny((ev,p) => console.debug('socket event', ev, p));
+    }
+    function stopRealtime() {
+      if (!socket) return;
+      try { socket.emit('leave_device_room', currentDevice); } catch(e) {}
+      try { socket.disconnect(); } catch(e) {}
+      socket = null; currentDevice = null;
+      document.getElementById('status').innerText = 'Realtime desligado';
+    }
+
+    function handleRealtimeData(data) {
+      try {
+        const p = extractLocation(data);
+        if (!isFinite(Number(p.lat)) || !isFinite(Number(p.lon))) return;
+        // apply current time filter: if incoming timestamp is outside filter, ignore
+        const range = document.getElementById('timeRange').value;
+        if (range !== 'all') {
+          const now = Date.now();
+          let cutoff = 0;
+          if (range === '1h') cutoff = now - 1000*60*60;
+          else if (range === '24h') cutoff = now - 1000*60*60*24;
+          else if (range === '7d') cutoff = now - 1000*60*60*24*7;
+          if (Number(p.ts) < cutoff) return; // ignore
+        }
+        latlngs.push([Number(p.lat), Number(p.lon)]);
+        addPoint(p.lat, p.lon, p.acc, p.ts, true);
+        prependList(p.lat, p.lon, p.acc, p.ts);
+      } catch(e) { console.error('handleRealtimeData err', e); }
+    }
+
+    // UI binding + auto refresh
+    document.getElementById('btnLoad').addEventListener('click', async () => {
+      await loadOnce();
+      const deviceId = document.getElementById('deviceId').value.trim();
+      const realtimeChecked = document.getElementById('realtimeToggle').checked;
+      if (realtimeChecked) startRealtime(deviceId); else stopRealtime();
+      if (autoRefreshHandle) { clearInterval(autoRefreshHandle); autoRefreshHandle = null; }
+      if (document.getElementById('autoRefresh').checked) {
+        autoRefreshHandle = setInterval(() => { loadOnce(); }, 30000);
+      }
+    });
+
+    document.getElementById('btnClear').addEventListener('click', clearAll);
+    document.getElementById('logout').addEventListener('click', ()=>{ localStorage.clear(); location.href='/' });
+
+    // realtime toggle listener
+    document.getElementById('realtimeToggle').addEventListener('change', (ev) => {
+      const deviceId = document.getElementById('deviceId').value.trim();
+      if (!deviceId) return alert('Insira deviceId');
+      if (ev.target.checked) startRealtime(deviceId); else stopRealtime();
+    });
+
+    // autoload from querystring
+    const q = new URLSearchParams(window.location.search);
+    if (q.get('deviceId')) { document.getElementById('deviceId').value = q.get('deviceId'); setTimeout(()=>{ document.getElementById('btnLoad').click(); }, 300); }
+  </script>
+</body>
+</html>

@@ -1,0 +1,62 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"/><title>Media</title><link rel="stylesheet" href="/css/styles.css"></head>
+<body>
+  <div class="container">
+    <header style="display:flex;justify-content:space-between"><h1>Media</h1><div><a href="/user/dashboard.html">Voltar</a> <button id="logout">Logout</button></div></header>
+
+    <div class="card">
+      <label>DeviceId: <input id="deviceId" /></label>
+      <button id="btnLoad">Listar</button>
+    </div>
+
+    <div class="card"><ul id="list" style="list-style:none;padding-left:0"></ul></div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    if (!localStorage.getItem('auth_token')) location.href = '/';
+    const token = localStorage.getItem('auth_token');
+    document.getElementById('logout').addEventListener('click', ()=>{ localStorage.clear(); location.href='/' });
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('deviceId')) document.getElementById('deviceId').value = params.get('deviceId');
+
+    document.getElementById('btnLoad').addEventListener('click', async () => {
+      const deviceId = document.getElementById('deviceId').value.trim();
+      if (!deviceId) return alert('DeviceId required');
+      const r = await apiFetch('/api/media/list/' + encodeURIComponent(deviceId), { method:'GET' });
+      const ul = document.getElementById('list'); ul.innerHTML = '';
+      if (!r.ok) { ul.innerHTML = '<li>Erro: ' + JSON.stringify(r) + '</li>'; return; }
+      r.files.forEach(f => {
+        const li = document.createElement('li');
+        li.innerHTML = `<div style="padding:8px;border-bottom:1px solid #eee"><strong>${f.filename}</strong><div>${new Date(f.uploadDate).toLocaleString()}</div>
+                        <button class="btnOpen" data-id="${f.fileId}">Abrir</button></div>`;
+        ul.appendChild(li);
+      });
+
+      // attach open handlers
+      document.querySelectorAll('.btnOpen').forEach(b => {
+        b.addEventListener('click', async () => {
+          const fileId = b.getAttribute('data-id');
+          try {
+            const res = await fetch('/api/media/download/' + encodeURIComponent(fileId), {
+              headers: { 'Authorization': 'Bearer ' + token }
+            });
+            if (!res.ok) { alert('Erro: ' + await res.text()); return; }
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            window.open(url, '_blank');
+            setTimeout(()=> URL.revokeObjectURL(url), 30*60*1000);
+          } catch (err) {
+            alert('Erro: ' + err.message);
+          }
+        });
+      });
+
+    });
+
+    if (document.getElementById('deviceId').value) document.getElementById('btnLoad').click();
+  </script>
+</body>
+</html>

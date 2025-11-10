@@ -1,0 +1,59 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/><title>Notificações</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <div class="container">
+    <header style="display:flex;justify-content:space-between">
+      <h1>Notificações</h1>
+      <div><a href="/user/dashboard.html">Voltar</a> <button id="logout">Logout</button></div>
+    </header>
+
+    <div class="card">
+      <label>DeviceId: <input id="deviceId" /></label>
+      <button id="btnLoad">Carregar</button>
+    </div>
+
+    <div class="card">
+      <h3>Lista</h3>
+      <ul id="list" style="list-style:none;padding-left:0"></ul>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    const token = localStorage.getItem('auth_token');
+    if (!token) location.href = '/';
+
+    document.getElementById('logout').addEventListener('click', ()=>{ localStorage.clear(); location.href='/' });
+
+    // se vier ?deviceId=... preenche
+    const params = new URLSearchParams(window.location.search);
+    const initialDevice = params.get('deviceId');
+    if (initialDevice) document.getElementById('deviceId').value = initialDevice;
+
+    document.getElementById('btnLoad').addEventListener('click', load);
+
+    async function load(){
+      const deviceId = document.getElementById('deviceId').value.trim();
+      if (!deviceId) return alert('deviceId required');
+      const r = await apiFetch('/api/telemetry/' + encodeURIComponent(deviceId) + '/items?type=notification', { method:'GET' });
+      const ul = document.getElementById('list');
+      ul.innerHTML = '';
+      if (!r.ok) { ul.innerHTML = '<li>Erro: ' + JSON.stringify(r) + '</li>'; return; }
+      r.items.forEach(item => {
+        const li = document.createElement('li');
+        const ts = new Date(item.ts).toLocaleString();
+        const payload = item.payload || item;
+        li.innerHTML = `<div style="padding:8px;border-bottom:1px solid #eee"><small>${ts}</small><div><strong>${payload.payload && payload.payload.title ? payload.payload.title : (payload.title||'')}</strong></div><div>${payload.payload && payload.payload.text ? payload.payload.text : (payload.text||'')}</div></div>`;
+        ul.appendChild(li);
+      });
+    }
+
+    // auto load if deviceId provided
+    if (initialDevice) load();
+  </script>
+</body>
+</html>

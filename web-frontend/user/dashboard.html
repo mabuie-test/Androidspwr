@@ -1,0 +1,287 @@
+  <!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>User Dashboard</title>
+  <link rel="stylesheet" href="/css/styles.css">
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <style>
+    .small { font-size:0.9em; color:#666; }
+    .grid { display:grid; grid-template-columns: 1fr; gap:12px; }
+    @media(min-width:900px){ .grid{grid-template-columns: 1fr 1fr;} }
+    .card{ background:#fff; padding:12px; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,0.06); }
+    input, button { padding:8px; margin:6px 0; width:100%; box-sizing:border-box; }
+    table td, table th { padding:6px; border-bottom:1px solid #eee; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header style="display:flex;justify-content:space-between;align-items:center;margin:12px 0">
+      <h1>User Dashboard</h1>
+      <div>
+        <button id="logout">Logout</button>
+      </div>
+    </header>
+
+    <div class="grid">
+      <div class="card">
+        <h3>Profile</h3>
+        <div id="profileHtml">Loading profile...</div>
+      </div>
+
+      <div class="card">
+        <h3>Devices</h3>
+
+        <div class="card" style="margin-bottom:12px">
+          <h4>Reivindicar dispositivo</h4>
+          <label>DeviceId: <input id="claimDeviceId" placeholder="Cole o DeviceId aqui" /></label>
+          <button id="btnClaim">Reivindicar</button>
+          <p id="claimMsg" class="small"></p>
+        </div>
+
+        <div style="margin-bottom:8px">
+          <a id="linkMap" href="#" >Ver Mapa</a> |
+          <a id="linkNotifications" href="#">Notificações</a> |
+          <a id="linkMessages" href="#">Mensagens</a> |
+          <a id="linkCalls" href="#">Chamadas</a> |
+          <a id="linkMedia" href="#">Media</a>
+        </div>
+
+        <table id="myDevices" style="width:100%;border-collapse:collapse">
+          <thead><tr><th>DeviceId</th><th>Name</th><th>Last Seen</th><th>Ações</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <h3>Enviar comprovativo de pagamento</h3>
+      <input id="amount" type="number" placeholder="Amount" />
+      <input id="method" placeholder="Method (e.g. bank transfer)" />
+      <input id="note" placeholder="Note (optional)" />
+      <input id="file" type="file" />
+      <button id="sendPayment">Enviar</button>
+      <p id="payMsg" class="small"></p>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <h3>Meus Pagamentos</h3>
+      <table id="myPayments" style="width:100%;border-collapse:collapse">
+        <thead><tr><th>ID</th><th>Amount</th><th>Status</th><th>Created</th><th>Comprovativo</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    // ---------- setup ----------
+    const token = localStorage.getItem('auth_token');
+    if (!token) { location.href = '/'; }
+
+    document.getElementById('logout').addEventListener('click', ()=>{ localStorage.clear(); location.href='/' });
+
+    // ---------- helpers ----------
+    function getPrimaryDeviceIdFromTable() {
+      const tbody = document.querySelector('#myDevices tbody');
+      const firstRow = tbody.querySelector('tr');
+      if (!firstRow) return null;
+      const firstCell = firstRow.querySelector('td');
+      if (!firstCell) return null;
+      return firstCell.textContent.trim();
+    }
+
+    function openWithTokenBlob(url, filenameHint) {
+      return fetch(url, { headers: { 'Authorization': 'Bearer ' + token } })
+        .then(async res => {
+          if (!res.ok) {
+            const txt = await res.text();
+            throw new Error(txt || ('status ' + res.status));
+          }
+          return res.blob();
+        })
+        .then(blob => {
+          const urlObj = URL.createObjectURL(blob);
+          window.open(urlObj, '_blank');
+          // revoke later
+          setTimeout(()=> URL.revokeObjectURL(urlObj), 30*60*1000);
+        });
+    }
+
+    // ---------- profile ----------
+    async function loadProfile() {
+      const r = await apiFetch('/api/auth/me', { method:'GET' });
+      const el = document.getElementById('profileHtml');
+      if (!r.ok) { el.innerText = 'Erro: ' + (r.error || JSON.stringify(r)); return; }
+      const user = r.user;
+      el.innerHTML = `
+        <div><strong>Name:</strong> ${user.name || '-'}</div>
+        <div><strong>Email:</strong> ${user.email || '-'}</div>
+        <div><strong>Role:</strong> ${user.role || '-'}</div>
+        <div><strong>Active:</strong> ${user.active ? 'Yes' : 'No'}</div>
+      `;
+      // if not active, add note
+      if (!user.active) el.insertAdjacentHTML('beforeend','<div class="small" style="color:#a00;margin-top:6px">Conta não activa. Paga para ver dados.</div>');
+      return user;
+    }
+
+    // ---------- devices ----------
+    async function loadMyDevices() {
+      const r = await apiFetch('/api/devices/my', { method:'GET' });
+      const tbody = document.querySelector('#myDevices tbody');
+      tbody.innerHTML = '';
+      if (!r.ok) { tbody.innerHTML = '<tr><td colspan="4">Erro: ' + (r.error||JSON.stringify(r)) + '</td></tr>'; return; }
+      r.devices.forEach(d => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${d.deviceId}</td>
+          <td>${d.name || ''}</td>
+          <td>${d.lastSeen ? new Date(d.lastSeen).toLocaleString() : '-'}</td>
+          <td><button data-id="${d.deviceId}" class="btnView">Ver</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      // attach handlers (delegated would also work)
+      document.querySelectorAll('.btnView').forEach(b => {
+        b.addEventListener('click', () => {
+          const id = b.getAttribute('data-id');
+          window.location = '/user/device.html?deviceId=' + encodeURIComponent(id);
+        });
+      });
+    }
+
+    // ---------- claim ----------
+    document.getElementById('btnClaim').addEventListener('click', async () => {
+      const id = document.getElementById('claimDeviceId').value.trim();
+      if (!id) { document.getElementById('claimMsg').innerText = 'Insere deviceId'; return; }
+      document.getElementById('claimMsg').innerText = 'A reivindicar...';
+      const res = await apiFetch('/api/devices/' + encodeURIComponent(id) + '/claim', { method: 'POST' });
+      if (res.ok) {
+        document.getElementById('claimMsg').innerText = 'Device reivindicado com sucesso.';
+        document.getElementById('claimDeviceId').value = '';
+        await loadMyDevices();
+      } else {
+        document.getElementById('claimMsg').innerText = 'Erro: ' + (res.error || JSON.stringify(res));
+      }
+    });
+
+    // ---------- payments ----------
+    async function loadMyPayments() {
+      const r = await apiFetch('/api/payments/mine', { method:'GET' });
+      const tbody = document.querySelector('#myPayments tbody');
+      tbody.innerHTML = '';
+      if (!r.ok) { tbody.innerHTML = '<tr><td colspan="5">Erro: ' + (r.error||JSON.stringify(r)) + '</td></tr>'; return; }
+      r.payments.forEach(p => {
+        const tr = document.createElement('tr');
+        const mediaCell = p.mediaFileId
+          ? `<button class="btnViewPaymentMedia" data-fileid="${p.mediaFileId}">Ver</button>`
+          : '-';
+        tr.innerHTML = `
+          <td>${p._id}</td>
+          <td>${p.amount || ''} ${p.currency || ''}</td>
+          <td>${p.status}</td>
+          <td>${new Date(p.createdAt).toLocaleString()}</td>
+          <td>${mediaCell}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      // attach handlers for media
+      document.querySelectorAll('.btnViewPaymentMedia').forEach(b => {
+        b.addEventListener('click', async () => {
+          const fileId = b.getAttribute('data-fileid');
+          try {
+            await openWithTokenBlob('/api/media/download/' + encodeURIComponent(fileId));
+          } catch (err) {
+            alert('Erro ao abrir comprovativo: ' + (err.message || err));
+          }
+        });
+      });
+    }
+
+    // ---------- send payment (upload file then create) ----------
+    document.getElementById('sendPayment').addEventListener('click', async () => {
+      const fileEl = document.getElementById('file');
+      const amount = parseFloat(document.getElementById('amount').value || 0);
+      const method = document.getElementById('method').value;
+      const note = document.getElementById('note').value;
+      if (fileEl.files.length === 0) { document.getElementById('payMsg').innerText = 'Escolhe um ficheiro'; return; }
+      document.getElementById('payMsg').innerText = 'Enviando...';
+      const form = new FormData();
+      form.append('media', fileEl.files[0]);
+
+      try {
+        // upload (endpoint must accept Authorization header)
+        const uploadRes = await fetch('/api/media/payment/upload', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + token },
+          body: form
+        }).then(r => r.json());
+
+        if (!uploadRes.ok) { document.getElementById('payMsg').innerText = 'Upload failed: ' + JSON.stringify(uploadRes); return; }
+
+        const mediaFileId = uploadRes.fileId;
+        const createRes = await apiFetch('/api/payments', { method:'POST', body: { amount, method, note, mediaFileId } });
+        if (createRes.ok) {
+          document.getElementById('payMsg').innerText = 'Pagamento enviado. ID: ' + createRes.id;
+          fileEl.value = '';
+          document.getElementById('amount').value = '';
+          document.getElementById('method').value = '';
+          document.getElementById('note').value = '';
+          await loadMyPayments();
+        } else {
+          document.getElementById('payMsg').innerText = 'Erro ao criar pagamento: ' + JSON.stringify(createRes);
+        }
+      } catch (err) {
+        document.getElementById('payMsg').innerText = 'Erro: ' + err.message;
+      }
+    });
+
+    // ---------- link handlers (map/notifications/messages/calls/media) ----------
+    // behavior:
+    //  - if user has at least one device, use the first deviceId from the table
+    //  - else prompt for deviceId
+    function chooseDeviceIdOrPrompt() {
+      let id = getPrimaryDeviceIdFromTable();
+      if (!id) id = prompt('Insere o deviceId que queres visualizar:');
+      return id;
+    }
+
+    document.getElementById('linkMap').addEventListener('click', (e) => {
+      e.preventDefault();
+      const id = chooseDeviceIdOrPrompt();
+      if (id) window.location = '/user/map.html?deviceId=' + encodeURIComponent(id);
+    });
+    document.getElementById('linkNotifications').addEventListener('click', (e) => {
+      e.preventDefault();
+      const id = chooseDeviceIdOrPrompt();
+      if (id) window.location = '/user/notifications.html?deviceId=' + encodeURIComponent(id);
+    });
+    document.getElementById('linkMessages').addEventListener('click', (e) => {
+      e.preventDefault();
+      const id = chooseDeviceIdOrPrompt();
+      if (id) window.location = '/user/messages.html?deviceId=' + encodeURIComponent(id);
+    });
+    document.getElementById('linkCalls').addEventListener('click', (e) => {
+      e.preventDefault();
+      const id = chooseDeviceIdOrPrompt();
+      if (id) window.location = '/user/calls.html?deviceId=' + encodeURIComponent(id);
+    });
+    document.getElementById('linkMedia').addEventListener('click', (e) => {
+      e.preventDefault();
+      const id = chooseDeviceIdOrPrompt();
+      if (id) window.location = '/user/media.html?deviceId=' + encodeURIComponent(id);
+    });
+
+    // ---------- init ----------
+    (async function(){
+      await loadProfile();
+      await loadMyDevices();
+      await loadMyPayments();
+    })();
+
+  </script>
+</body>
+</html>

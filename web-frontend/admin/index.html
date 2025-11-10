@@ -1,0 +1,167 @@
+ <!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/><title>Admin Dashboard</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <link rel="stylesheet" href="/css/styles.css">
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <header style="display:flex;justify-content:space-between;align-items:center">
+      <h1>Admin Dashboard</h1>
+      <div>
+        <button id="btnRefresh">Refresh</button>
+        <button id="logout">Logout</button>
+      </div>
+    </header>
+
+    <section class="card">
+      <h2>Devices</h2>
+      <input id="deviceSearch" placeholder="Procurar DeviceId, nome ou owner"/>
+      <table id="devicesTable" style="width:100%;border-collapse:collapse;margin-top:8px">
+        <thead>
+          <tr><th>DeviceId</th><th>Name</th><th>Owner</th><th>Last Seen</th><th>Ações</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="card" style="margin-top:16px">
+      <h2>Payments</h2>
+      <table id="paymentsTable" style="width:100%;border-collapse:collapse;margin-top:8px">
+        <thead>
+          <tr><th>ID</th><th>User</th><th>Amount</th><th>Status</th><th>Created</th><th>Ações</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    const token = localStorage.getItem('auth_token');
+    if (!token) { alert('not logged'); location.href='/'; }
+
+    async function loadDevices() {
+      const res = await apiFetch('/api/devices', { method:'GET' });
+      const tbody = document.querySelector('#devicesTable tbody');
+      tbody.innerHTML = '';
+      if (!res.ok) { tbody.innerHTML = '<tr><td colspan="5">Erro: ' + (res.error||JSON.stringify(res)) + '</td></tr>'; return; }
+      res.devices.forEach(d => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td style="padding:6px;border-bottom:1px solid #eee">${d.deviceId}</td>
+          <td style="padding:6px;border-bottom:1px solid #eee">${d.name || ''}</td>
+          <td style="padding:6px;border-bottom:1px solid #eee">${d.owner || ''}</td>
+          <td style="padding:6px;border-bottom:1px solid #eee">${d.lastSeen ? new Date(d.lastSeen).toLocaleString() : '-'}</td>
+          <td style="padding:6px;border-bottom:1px solid #eee">
+            <button data-id="${d.deviceId}" class="btnView">Ver</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      // attach handlers
+      // assume contexto: no admin -> leva para /admin/device.html, no user -> /user/device.html
+document.querySelectorAll('.btnView').forEach(b => {
+  b.addEventListener('click', () => {
+    const id = b.getAttribute('data-id');
+    // detecta se estamos no admin ou user pela URL atual
+    const path = window.location.pathname;
+    if (path.indexOf('/admin/') === 0 || path.indexOf('/admin') === 0) {
+      window.location = '/admin/device.html?deviceId=' + encodeURIComponent(id);
+    } else {
+      window.location = '/user/device.html?deviceId=' + encodeURIComponent(id);
+    }
+  });
+});
+
+    }
+
+    async function loadPayments() {
+      const res = await apiFetch('/api/payments', { method:'GET' });
+      const tbody = document.querySelector('#paymentsTable tbody');
+      tbody.innerHTML = '';
+      if (!res.ok) { tbody.innerHTML = '<tr><td colspan="6">Erro: ' + (res.error||JSON.stringify(res)) + '</td></tr>'; return; }
+      res.payments.forEach(p => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td style="padding:6px;border-bottom:1px solid #eee">${p._id}</td>
+          <td style="padding:6px;border-bottom:1px solid #eee">${(p.user && (p.user.email || p.user)) || ''}</td>
+          <td style="padding:6px;border-bottom:1px solid #eee">${p.amount || ''} ${p.currency || ''}</td>
+          <td style="padding:6px;border-bottom:1px solid #eee">${p.status}</td>
+          <td style="padding:6px;border-bottom:1px solid #eee">${new Date(p.createdAt).toLocaleString()}</td>
+          // dentro de res.payments.forEach(p => { ... })
+<td style="padding:6px;border-bottom:1px solid #eee">
+  ${p.status === 'pending' ? `<button data-id="${p._id}" class="btnApprove">Aprovar</button><button data-id="${p._id}" class="btnReject">Rejeitar</button>` : '-'}
+  ${p.mediaFileId ? `<button class="btnViewMedia" data-fileid="${p.mediaFileId}">Ver comprovativo</button>` : ''}
+</td>
+
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.querySelectorAll('.btnApprove').forEach(b => {
+        b.addEventListener('click', async () => {
+          if (!confirm('Aprovar pagamento?')) return;
+          const id = b.getAttribute('data-id');
+          const res = await apiFetch('/api/payments/' + encodeURIComponent(id) + '/process', { method:'POST', body: { action:'approve' } });
+          if (res.ok) { alert('Aprovado'); loadPayments(); }
+          else alert('Erro: ' + (res.error || JSON.stringify(res)));
+        });
+      });
+
+      document.querySelectorAll('.btnReject').forEach(b => {
+        b.addEventListener('click', async () => {
+          if (!confirm('Rejeitar pagamento?')) return;
+          const id = b.getAttribute('data-id');
+          const res = await apiFetch('/api/payments/' + encodeURIComponent(id) + '/process', { method:'POST', body: { action:'reject' } });
+          if (res.ok) { alert('Rejeitado'); loadPayments(); }
+          else alert('Erro: ' + (res.error || JSON.stringify(res)));
+        });
+      });
+document.querySelectorAll('.btnViewMedia').forEach(b => {
+  b.addEventListener('click', async () => {
+    const fileId = b.getAttribute('data-fileid');
+    try {
+      const res = await fetch('/api/media/download/' + encodeURIComponent(fileId), {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        alert('Erro ao descarregar: ' + txt);
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      // abre numa nova janela/aba
+      window.open(url, '_blank');
+      // opcional: revoke depois de meia hora
+      setTimeout(() => URL.revokeObjectURL(url), 30*60*1000);
+    } catch (err) {
+      alert('Erro: ' + err.message);
+    }
+  });
+});
+    }
+
+    document.getElementById('btnRefresh').addEventListener('click', () => { loadDevices(); loadPayments(); });
+    document.getElementById('logout').addEventListener('click', ()=>{ localStorage.clear(); location.href='/' });
+
+    // quick search
+    document.getElementById('deviceSearch').addEventListener('input', (e) => {
+      const q = (e.target.value || '').toLowerCase();
+      document.querySelectorAll('#devicesTable tbody tr').forEach(tr => {
+        const txt = tr.innerText.toLowerCase();
+        tr.style.display = txt.indexOf(q) !== -1 ? '' : 'none';
+      });
+    });
+
+    loadDevices();
+    loadPayments();
+
+  </script>
+</body>
+      </html>
+          

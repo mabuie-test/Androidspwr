@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"/><title>Mensagens</title><link rel="stylesheet" href="/css/styles.css"></head>
+<body>
+  <div class="container">
+    <header style="display:flex;justify-content:space-between"><h1>Mensagens (SMS)</h1><div><a href="/user/dashboard.html">Voltar</a> <button id="logout">Logout</button></div></header>
+    <div class="card"><label>DeviceId: <input id="deviceId" /></label><button id="btnLoad">Carregar</button></div>
+    <div class="card"><ul id="list" style="list-style:none;padding-left:0"></ul></div>
+  </div>
+  <script src="/js/api.js"></script>
+  <script>
+    if (!localStorage.getItem('auth_token')) location.href = '/';
+    document.getElementById('logout').addEventListener('click', ()=>{ localStorage.clear(); location.href='/' });
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('deviceId')) document.getElementById('deviceId').value = params.get('deviceId');
+
+    document.getElementById('btnLoad').addEventListener('click', async () => {
+      const deviceId = document.getElementById('deviceId').value.trim();
+      if (!deviceId) return alert('DeviceId required');
+      const r = await apiFetch('/api/telemetry/' + encodeURIComponent(deviceId) + '/items?type=sms', { method:'GET' });
+      const ul = document.getElementById('list'); ul.innerHTML = '';
+      if (!r.ok) { ul.innerHTML = '<li>Erro: ' + JSON.stringify(r) + '</li>'; return; }
+      r.items.forEach(it => {
+        const ts = new Date(it.ts).toLocaleString();
+        const p = it.payload || it;
+        const from = p.payload && p.payload.from ? p.payload.from : (p.from||'');
+        const body = p.payload && p.payload.body ? p.payload.body : (p.body||'');
+        const li = document.createElement('li');
+        li.innerHTML = `<div style="padding:8px;border-bottom:1px solid #eee"><small>${ts}</small><div><strong>From:</strong> ${from}</div><div>${body}</div></div>`;
+        ul.appendChild(li);
+      });
+    });
+
+    if (document.getElementById('deviceId').value) document.getElementById('btnLoad').click();
+  </script>
+</body>
+</html>

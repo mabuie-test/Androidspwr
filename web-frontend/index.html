@@ -1,0 +1,63 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>DeviceMgr - Login</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <div class="container">
+    <header><h1>Device Manager</h1></header>
+
+    <div class="grid">
+      <div class="card">
+        <h3>Login</h3>
+        <input id="email" placeholder="Email" />
+        <input id="password" type="password" placeholder="Password" />
+        <button id="btnLogin">Login</button>
+        <p id="loginMsg" class="small"></p>
+      </div>
+
+      <div class="card">
+        <h3>Register</h3>
+        <input id="r_email" placeholder="Email" />
+        <input id="r_name" placeholder="Name" />
+        <input id="r_password" type="password" placeholder="Password" />
+        <button id="btnRegister">Register</button>
+        <p id="regMsg" class="small"></p>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    document.getElementById('btnLogin').addEventListener('click', async () => {
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      const res = await apiFetch('/api/auth/login', { method:'POST', body: { email, password } });
+      if (res.token) {
+        localStorage.setItem('auth_token', res.token);
+        localStorage.setItem('role', res.role);
+        if (res.role === 'admin') location.href = '/admin/index.html';
+        else location.href = '/user/dashboard.html';
+      } else {
+        document.getElementById('loginMsg').innerText = 'Erro: ' + (res.error || JSON.stringify(res));
+      }
+    });
+
+    document.getElementById('btnRegister').addEventListener('click', async () => {
+      const email = document.getElementById('r_email').value;
+      const name = document.getElementById('r_name').value;
+      const password = document.getElementById('r_password').value;
+      const res = await apiFetch('/api/auth/register', { method:'POST', body: { email, name, password } });
+      if (res.ok) {
+        document.getElementById('regMsg').innerText = 'Registrado. Faz login.';
+      } else {
+        document.getElementById('regMsg').innerText = 'Erro: ' + (res.error || JSON.stringify(res));
+      }
+    });
+  </script>
+</body>
+    </html>
+          

@@ -1,0 +1,54 @@
+ /* styles.css - responsivo e limpo */
+:root{
+  --bg:#f6f8fb;
+  --card:#ffffff;
+  --muted:#6b7280;
+  --accent:#2563eb;
+  --accent-2:#0ea5a4;
+  --radius:10px;
+  --shadow: 0 6px 18px rgba(11,22,39,0.06);
+  --gutter:16px;
+  --maxwidth:1100px;
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--bg);font-family:var(--font-sans);color:#111827}
+.container{max-width:var(--maxwidth);margin:24px auto;padding:0 var(--gutter)}
+header h1{margin:0;font-size:1.25rem;color:#0f172a}
+.card{background:var(--card);padding:18px;border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:16px}
+.grid{display:grid;grid-template-columns:1fr;gap:16px}
+@media(min-width:900px){.grid{grid-template-columns: 1fr 1fr}}
+
+input[type="text"], input[type="number"], input[type="email"], input[type="password"], select, textarea {
+  width:100%;padding:10px;border:1px solid #e6e9ef;border-radius:8px;background:transparent;font-size:0.95rem;
+}
+button{cursor:pointer;padding:10px 14px;border-radius:8px;border:none;background:var(--accent);color:white;font-weight:600}
+button.secondary{background:#e6eefc;color:#0b2f6c}
+.small{font-size:0.9rem;color:var(--muted)}
+table{width:100%;border-collapse:collapse;font-size:0.95rem}
+table th{ text-align:left;color:#374151;padding:10px 8px;background:transparent }
+table td{padding:10px 8px;border-bottom:1px solid #eef2f7}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* social buttons */
+.btn {display:inline-block;padding:8px 12px;border-radius:8px;background:#111827;color:#fff;text-decoration:none}
+.social{background:#0ea5a4;padding:8px 12px;border-radius:8px;color:white}
+
+/* small layout helpers */
+.row{display:flex;gap:12px;align-items:center}
+.col{display:flex;flex-direction:column;gap:8px}
+
+/* responsive tweaks */
+@media (max-width:600px){
+  header h1{font-size:1rem}
+  .container{padding:0 12px}
+  button{width:100%}
+}
+
+/* map card fine-tune */
+#map{border-radius:8px;overflow:hidden}
+
+/* payments layout */
+dl{display:grid;grid-template-columns:120px 1fr;gap:6px 12px}
